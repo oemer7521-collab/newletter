@@ -1,0 +1,27 @@
+name: Daily Market News Briefing
+
+on:
+  schedule:
+    # Montag bis Freitag um 05:45 Uhr UTC (ca. 06:45 / 07:45 Uhr MEZ)
+    - cron: '45 5 * * 1-5'
+  workflow_dispatch: # Erlaubt manuelles Starten per Klick
+
+jobs:
+  run-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pakete installieren
+        run: pip install google-genai feedparser requests
+      - name: Skript starten
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+        run: python market_report.py
