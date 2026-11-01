@@ -55,10 +55,7 @@ Nachrichten:
 {raw_text}
 """
 
-# Live alle aktiven Groq-Modelle holen
 all_api_models = [m.id for m in client.models.list().data if getattr(m, 'active', True)]
-
-# Nicht-Text-Modelle ausschließen
 valid_models = [
     m for m in all_api_models
     if not any(x in m.lower() for x in ["guard", "whisper", "vision", "arabic", "orpheus", "tts", "embedding"])
@@ -192,27 +189,11 @@ for tag in ["<p>", "</p>", "<ul class=\"news-list\">", "</ul>", "<span class=\"s
 tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
 tg_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 if tg_token and tg_chat_id:
+    tg_url = f"[https://api.telegram.org/bot](https://api.telegram.org/bot){tg_token}/sendMessage"
     requests.post(
-        f"[https://api.telegram.org/bot](https://api.telegram.org/bot){tg_token}/sendMessage",
+        tg_url,
         data={"chat_id": tg_chat_id, "text": plain_summary.strip(), "parse_mode": "Markdown"}
     )
 
 # 5. E-Mail versenden (HTML + Text-Fallback)
-email_user = os.environ.get("EMAIL_USER")
-email_pass = os.environ.get("EMAIL_PASS")
-email_to = os.environ.get("EMAIL_RECEIVER")
-
-if email_user and email_pass and email_to:
-    msg = MIMEMultipart("alternative")
-    msg["From"] = f"Market Intelligence <{email_user}>"
-    msg["To"] = email_to
-    msg["Subject"] = "Daily Market Briefing: Global Macro & Equity"
-
-    msg.attach(MIMEText(plain_summary.strip(), "plain", "utf-8"))
-    msg.attach(MIMEText(full_email_html, "html", "utf-8"))
-
-    server = smtplib.SMTP("smtp.gmail.com", 587)
-    server.starttls()
-    server.login(email_user, email_pass)
-    server.sendmail(email_user, email_to, msg.as_string())
-    server.quit()
+email_user = os
