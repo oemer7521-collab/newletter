@@ -17,13 +17,13 @@ FEEDS = [
 collected_news = []
 for feed_url in FEEDS:
     feed = feedparser.parse(feed_url)
-    for entry in feed.entries[:6]:  # Die Top 6 je Quelle
+    for entry in feed.entries[:6]:
         summary = entry.get('summary', '') or entry.get('description', '')
         collected_news.append(f"- {entry.title}: {summary}")
 
 raw_text = "\n".join(collected_news)
 
-# 2. Verbindung zu Groq initialisieren
+# 2. Verbindung zu Groq & Live-Erkennung aktiver Modelle
 api_key = os.environ.get("GROQ_API_KEY", "").strip()
 client = Groq(api_key=api_key)
 
@@ -55,20 +55,21 @@ Nachrichten:
 {raw_text}
 """
 
-# Kandidaten-Modelle mit hoher Textqualität
-candidate_models = [
-    "llama3-70b-8192",
-    "llama3-8b-8192",
-    "gemma2-9b-it",
-    "mixtral-8x7b-32768",
-    "llama-3.1-8b-instant"
+# Live alle aktiven Groq-Modelle holen
+all_api_models = [m.id for m in client.models.list().data if getattr(m, 'active', True)]
+
+# Nicht-Text-Modelle ausschließen
+valid_models = [
+    m for m in all_api_models
+    if not any(x in m.lower() for x in ["guard", "whisper", "vision", "arabic", "orpheus", "tts", "embedding"])
 ]
 
-# Robustes Ausführen: Versucht die besten Modelle der Reihe nach
+print("Verfügbare Textmodelle auf Groq:", valid_models)
+
 report_html = None
-for model_name in candidate_models:
+for model_name in valid_models:
     try:
-        print(f"Versuche Modell: {model_name}...")
+        print(f"Versuche Generierung mit: {model_name}...")
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model=model_name,
@@ -78,12 +79,12 @@ for model_name in candidate_models:
         print(f"Erfolgreich generiert mit: {model_name}")
         break
     except Exception as e:
-        print(f"Modell {model_name} fehlgeschlagen: {e}")
+        print(f"Modell {model_name} übersprungen: {e}")
 
 if not report_html:
-    raise RuntimeError("Keines der konfigurierten Chat-Modelle konnte erfolgreich aufgerufen werden.")
+    raise RuntimeError("Keines der verfügbaren Modelle konnte für die Generierung genutzt werden.")
 
-# 3. HTML-Template für E-Mail (Responsive Newsletter-Optik)
+# 3. HTML-Template für E-Mail (Newsletter-Design)
 full_email_html = f"""<!DOCTYPE html>
 <html>
 <head>
