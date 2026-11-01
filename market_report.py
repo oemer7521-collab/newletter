@@ -17,39 +17,40 @@ FEEDS = [
 collected_news = []
 for feed_url in FEEDS:
     feed = feedparser.parse(feed_url)
-    for entry in feed.entries[:6]:
-        collected_news.append(f"- {entry.title}: {entry.get('summary', '')}")
+    for entry in feed.entries[:6]:  # Die Top 6 je Quelle
+        summary = entry.get('summary', '') or entry.get('description', '')
+        collected_news.append(f"- {entry.title}: {summary}")
 
 raw_text = "\n".join(collected_news)
 
-# 2. Analyse durch Groq mit geschärftem Prompt & bestem Modell
+# 2. Analyse durch Groq (starkes Textmodell wählen)
 api_key = os.environ.get("GROQ_API_KEY", "").strip()
 client = Groq(api_key=api_key)
 
-available_models = [m.id for m in client.models.list().data]
+# Alle reinen Chat-/Generierungsmodelle auflisten (keine Moderations-/Audio-Modelle)
+available_models = [
+    m.id for m in client.models.list().data 
+    if "guard" not in m.id and "whisper" not in m.id and "vision" not in m.id
+]
 
-# Bevorzuge große 70B/Flaggschiff-Modelle für hohe sprachliche Präzision
+# Bekannte produktive Groq-Modelle priorisieren
 priority_models = [
     "llama-3.3-70b-versatile",
-    "llama-3.2-90b-vision-preview",
     "llama-3.1-70b-versatile",
-    "mixtral-8x7b-32768",
-    "llama-3.1-8b-instant"
+    "llama3-70b-8192",
+    "llama-3.1-8b-instant",
+    "llama3-8b-8192",
+    "mixtral-8x7b-32768"
 ]
+
 chosen_model = next((m for m in priority_models if m in available_models), available_models[0])
+print(f"Ausgewähltes Modell: {chosen_model}")
 
-system_prompt = (
-    "Du bist leitender Chefanalyst und Makrostratege für institutionelle Investoren. "
-    "Deine Aufgabe ist es, weltweite Wirtschaftsmeldungen zu filtern und in stilsicherem, "
-    "prägnantem Finanzdeutsch (Börsenfachsprache) zusammenzufassen. "
-    "Verzichte auf Floskeln oder Einleitungen. Antworte ausschließlich im vorgegebenen HTML-Snippet-Format."
-)
+prompt = f"""
+Du bist Senior-Makroanalyst und Portfoliostratege für institutionelle Anleger.
+Analysiere die folgenden Wirtschaftsnachrichten und erstelle ein kompaktes Daily Market Briefing auf Deutsch unter Verwendung präziser Börsenfachsprache. Formuliere nüchtern, faktenbasiert und handlungsorientiert. Keine Füllsätze, keine Begrüßung.
 
-user_prompt = f"""
-Analysiere die folgenden Nachrichtenmeldungen und erstelle ein kompaktes Daily Market Briefing.
-Formatiere deine Antwort direkt als HTML (nutze nur <p>, <ul>, <li>, <strong>, <span> - KEIN ```html Codeblock, kein <html> oder <body>).
-
-Strukturvorgabe:
+Antworte AUSSCHLIESSLICH im folgenden HTML-Snippet-Format (kein ```html Codeblock, keine Markdown-Backticks):
 
 <div class="section-title">🚨 TOP-MARKTBEWEGER</div>
 <ul class="news-list">
@@ -58,53 +59,49 @@ Strukturvorgabe:
 
 <div class="section-title">📊 MAKRO, ZINSEN & WÄHRUNGEN</div>
 <ul class="news-list">
-  <li><strong>[Thema]:</strong> [Auswirkung auf Renditen, Währungen oder Zentralbankpolitik]</li>
+  <li><strong>[Thema]:</strong> [Auswirkung auf Renditen, Devisenmärkte oder Notenbankpolitik]</li>
 </ul>
 
 <div class="section-title">🏢 UNTERNEHMEN & KEY MOVERS</div>
 <ul class="news-list">
-  <li><strong>[Unternehmen/Branche]:</strong> [Relevanz für Quartalszahlen oder Kursentwicklung]</li>
+  <li><strong>[Unternehmen/Sektor]:</strong> [Relevanz für Margen, Earnings oder operative Trends]</li>
 </ul>
 
-<div class="section-title">🧭 FAZIT & HANDELSSTIMMUNG</div>
-<p><strong>Sentiment:</strong> <span class="sentiment">[Risk-On / Risk-Off / Abwartend]</span> - [1-2 Sätze Begründung zur Tageserwartung]</p>
+<div class="section-title">🧭 FAZIT & MARKTSTIMMUNG</div>
+<p><strong>Sentiment:</strong> <span class="sentiment">[Risk-On / Risk-Off / Neutral]</span> - [1-2 Sätze Erwartung für die heutige Handelssitzung]</p>
 
 Meldungen zur Analyse:
 {raw_text}
 """
 
 chat_completion = client.chat.completions.create(
-    messages=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt}
-    ],
+    messages=[{"role": "user", "content": prompt}],
     model=chosen_model,
     temperature=0.2,
 )
 analysis_html = chat_completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
 
-# 3. Ansprechendes E-Mail HTML-Template zusammenbauen
-full_email_html = f"""
-<!DOCTYPE html>
+# 3. HTML-Template für E-Mail (Responsive Newsletter-Optik)
+full_email_html = f"""<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {{
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       line-height: 1.6;
-      color: #1e293b;
-      background-color: #f8fafc;
+      color: #0f172a;
+      background-color: #f1f5f9;
       margin: 0;
       padding: 24px;
     }}
     .container {{
-      max-width: 650px;
+      max-width: 640px;
       margin: 0 auto;
       background: #ffffff;
-      border-radius: 12px;
+      border-radius: 8px;
       padding: 32px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
       border: 1px solid #e2e8f0;
     }}
     .header {{
@@ -115,25 +112,28 @@ full_email_html = f"""
     .header h1 {{
       margin: 0;
       font-size: 22px;
-      color: #0f172a;
+      font-weight: 800;
       letter-spacing: -0.5px;
+      color: #0f172a;
     }}
-    .header .subtitle {{
+    .subtitle {{
       margin: 4px 0 0 0;
-      font-size: 13px;
-      color: #64748b;
-      text-transform: uppercase;
+      font-size: 12px;
       font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #64748b;
     }}
     .section-title {{
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
-      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #1e293b;
       margin-top: 24px;
       margin-bottom: 12px;
       padding-bottom: 4px;
       border-bottom: 1px solid #cbd5e1;
-      letter-spacing: 0.3px;
     }}
     .news-list {{
       padding-left: 18px;
@@ -148,17 +148,18 @@ full_email_html = f"""
       color: #0f172a;
     }}
     .sentiment {{
-      background: #e2e8f0;
-      padding: 2px 8px;
+      background: #0f172a;
+      color: #ffffff !important;
+      padding: 3px 8px;
       border-radius: 4px;
       font-weight: 600;
-      color: #0f172a;
+      font-size: 13px;
     }}
     .footer {{
       margin-top: 32px;
       padding-top: 16px;
-      border-top: 1px solid #f1f5f9;
-      font-size: 12px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 11px;
       color: #94a3b8;
       text-align: center;
     }}
@@ -167,19 +168,18 @@ full_email_html = f"""
 <body>
   <div class="container">
     <div class="header">
-      <h1>Daily Market Briefing</h1>
+      <h1>DAILY MARKET BRIEFING</h1>
       <div class="subtitle">Global Macro & Equity Intelligence</div>
     </div>
     {analysis_html}
     <div class="footer">
-      Automatisch generiert via GitHub Actions & Groq Llama 3
+      Serverless Briefing • Automatisierte Pipeline via GitHub Actions
     </div>
   </div>
 </body>
-</html>
-"""
+</html>"""
 
-# 4. Telegram-Text (bereinigte Textfassung ohne HTML-Layout)
+# 4. Telegram-Benachrichtigung
 plain_summary = analysis_html.replace("<div class=\"section-title\">", "\n\n📌 ").replace("</div>", "")
 plain_summary = plain_summary.replace("<li>", "• ").replace("</li>", "\n")
 plain_summary = plain_summary.replace("<strong>", "*").replace("</strong>", "*")
@@ -194,7 +194,7 @@ if tg_token and tg_chat_id:
         data={"chat_id": tg_chat_id, "text": plain_summary.strip(), "parse_mode": "Markdown"}
     )
 
-# 5. E-Mail als HTML versenden
+# 5. E-Mail versenden (HTML + Text-Fallback)
 email_user = os.environ.get("EMAIL_USER")
 email_pass = os.environ.get("EMAIL_PASS")
 email_to = os.environ.get("EMAIL_RECEIVER")
@@ -203,9 +203,9 @@ if email_user and email_pass and email_to:
     msg = MIMEMultipart("alternative")
     msg["From"] = f"Market Intelligence <{email_user}>"
     msg["To"] = email_to
-    msg["Subject"] = "Daily Market Briefing: Relevante Markteinflüsse"
+    msg["Subject"] = "Daily Market Briefing: Global Macro & Equity"
 
-    # HTML-Part anhängen
+    msg.attach(MIMEText(plain_summary.strip(), "plain", "utf-8"))
     msg.attach(MIMEText(full_email_html, "html", "utf-8"))
 
     server = smtplib.SMTP("smtp.gmail.com", 587)
