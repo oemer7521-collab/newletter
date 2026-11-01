@@ -1,4 +1,4 @@
-import os
+imporimport os
 import smtplib
 import feedparser
 import requests
@@ -22,7 +22,7 @@ for feed_url in FEEDS:
 
 raw_text = "\n".join(collected_news)
 
-# 2. Analyse durch Groq Llama 3
+# 2. Analyse durch Groq (llama-3.1-8b-instant)
 api_key = os.environ.get("GROQ_API_KEY", "").strip()
 client = Groq(api_key=api_key)
 
@@ -49,7 +49,7 @@ Meldungen:
 
 chat_completion = client.chat.completions.create(
     messages=[{"role": "user", "content": prompt}],
-    model="llama-3.1-70b-versatile",
+    model="llama-3.1-8b-instant",
 )
 report_text = chat_completion.choices[0].message.content
 
@@ -71,11 +71,14 @@ if email_user and email_pass and email_to:
     msg = MIMEMultipart()
     msg["From"] = f"Market Bot <{email_user}>"
     msg["To"] = email_to
-    msg["Subject"] = "Daily Market Briefing: Relevante Markteinflüsse"
+    msg["Subject"] = "Daily Market Briefing: Relevante Markteinflusse"
     msg.attach(MIMEText(report_text, "plain", "utf-8"))
 
     server = smtplib.SMTP("smtp.gmail.com", 587)
     server.starttls()
+    server.login(email_user, email_pass)
+    server.sendmail(email_user, email_to, msg.as_string())
+    server.quit()
     server.login(email_user, email_pass)
     server.sendmail(email_user, email_to, msg.as_string())
     server.quit()
