@@ -23,28 +23,9 @@ for feed_url in FEEDS:
 
 raw_text = "\n".join(collected_news)
 
-# 2. Analyse durch Groq (starkes Textmodell wählen)
+# 2. Verbindung zu Groq initialisieren
 api_key = os.environ.get("GROQ_API_KEY", "").strip()
 client = Groq(api_key=api_key)
-
-# Alle reinen Chat-/Generierungsmodelle auflisten (keine Moderations-/Audio-Modelle)
-available_models = [
-    m.id for m in client.models.list().data 
-    if "guard" not in m.id and "whisper" not in m.id and "vision" not in m.id
-]
-
-# Bekannte produktive Groq-Modelle priorisieren
-priority_models = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-70b-versatile",
-    "llama3-70b-8192",
-    "llama-3.1-8b-instant",
-    "llama3-8b-8192",
-    "mixtral-8x7b-32768"
-]
-
-chosen_model = next((m for m in priority_models if m in available_models), available_models[0])
-print(f"Ausgewähltes Modell: {chosen_model}")
 
 prompt = f"""
 Du bist Senior-Makroanalyst und Portfoliostratege für institutionelle Anleger.
@@ -70,16 +51,37 @@ Antworte AUSSCHLIESSLICH im folgenden HTML-Snippet-Format (kein ```html Codebloc
 <div class="section-title">🧭 FAZIT & MARKTSTIMMUNG</div>
 <p><strong>Sentiment:</strong> <span class="sentiment">[Risk-On / Risk-Off / Neutral]</span> - [1-2 Sätze Erwartung für die heutige Handelssitzung]</p>
 
-Meldungen zur Analyse:
+Nachrichten:
 {raw_text}
 """
 
-chat_completion = client.chat.completions.create(
-    messages=[{"role": "user", "content": prompt}],
-    model=chosen_model,
-    temperature=0.2,
-)
-analysis_html = chat_completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
+# Kandidaten-Modelle mit hoher Textqualität
+candidate_models = [
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "gemma2-9b-it",
+    "mixtral-8x7b-32768",
+    "llama-3.1-8b-instant"
+]
+
+# Robustes Ausführen: Versucht die besten Modelle der Reihe nach
+report_html = None
+for model_name in candidate_models:
+    try:
+        print(f"Versuche Modell: {model_name}...")
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=model_name,
+            temperature=0.2,
+        )
+        report_html = chat_completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
+        print(f"Erfolgreich generiert mit: {model_name}")
+        break
+    except Exception as e:
+        print(f"Modell {model_name} fehlgeschlagen: {e}")
+
+if not report_html:
+    raise RuntimeError("Keines der konfigurierten Chat-Modelle konnte erfolgreich aufgerufen werden.")
 
 # 3. HTML-Template für E-Mail (Responsive Newsletter-Optik)
 full_email_html = f"""<!DOCTYPE html>
@@ -171,7 +173,7 @@ full_email_html = f"""<!DOCTYPE html>
       <h1>DAILY MARKET BRIEFING</h1>
       <div class="subtitle">Global Macro & Equity Intelligence</div>
     </div>
-    {analysis_html}
+    {report_html}
     <div class="footer">
       Serverless Briefing • Automatisierte Pipeline via GitHub Actions
     </div>
@@ -180,7 +182,7 @@ full_email_html = f"""<!DOCTYPE html>
 </html>"""
 
 # 4. Telegram-Benachrichtigung
-plain_summary = analysis_html.replace("<div class=\"section-title\">", "\n\n📌 ").replace("</div>", "")
+plain_summary = report_html.replace("<div class=\"section-title\">", "\n\n📌 ").replace("</div>", "")
 plain_summary = plain_summary.replace("<li>", "• ").replace("</li>", "\n")
 plain_summary = plain_summary.replace("<strong>", "*").replace("</strong>", "*")
 for tag in ["<p>", "</p>", "<ul class=\"news-list\">", "</ul>", "<span class=\"sentiment\">", "</span>"]:
