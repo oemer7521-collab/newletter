@@ -17,7 +17,7 @@ FEEDS = [
 collected_news = []
 for feed_url in FEEDS:
     feed = feedparser.parse(feed_url)
-    for entry in feed.entries[:6]:
+    for entry in feed.entries[:6]:  # Die Top 6 je Quelle
         collected_news.append(f"- {entry.title}: {entry.get('summary', '')}")
 
 raw_text = "\n".join(collected_news)
@@ -49,7 +49,7 @@ Meldungen:
 
 chat_completion = client.chat.completions.create(
     messages=[{"role": "user", "content": prompt}],
-    model="llama-3.3-70b-versatile",
+    model="llama-3.1-70b-versatile",
 )
 report_text = chat_completion.choices[0].message.content
 
@@ -71,7 +71,7 @@ if email_user and email_pass and email_to:
     msg = MIMEMultipart()
     msg["From"] = f"Market Bot <{email_user}>"
     msg["To"] = email_to
-    msg["Subject"] = "Daily Market Briefing: Relevante Markteinflusse"
+    msg["Subject"] = "Daily Market Briefing: Relevante Markteinflüsse"
     msg.attach(MIMEText(report_text, "plain", "utf-8"))
 
     server = smtplib.SMTP("smtp.gmail.com", 587)
