@@ -17,14 +17,28 @@ FEEDS = [
 collected_news = []
 for feed_url in FEEDS:
     feed = feedparser.parse(feed_url)
-    for entry in feed.entries[:6]:  # Die Top 6 je Quelle
+    for entry in feed.entries[:6]:
         collected_news.append(f"- {entry.title}: {entry.get('summary', '')}")
 
 raw_text = "\n".join(collected_news)
 
-# 2. Analyse durch Groq (llama-3.1-8b-instant)
+# 2. Verfügbares Groq-Modell automatisch ermitteln
 api_key = os.environ.get("GROQ_API_KEY", "").strip()
 client = Groq(api_key=api_key)
+
+available_models = [m.id for m in client.models.list().data]
+
+# Bevorzugte Modelle der Reihe nach prüfen
+preferred_models = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "llama3-8b-8192",
+    "gemma2-9b-it",
+    "mixtral-8x7b-32768"
+]
+
+chosen_model = next((m for m in preferred_models if m in available_models), available_models[0])
+print(f"Verwende Modell: {chosen_model}")
 
 prompt = f"""
 Du bist ein erfahrener Börsenanalyst und Makroökonom.
@@ -49,7 +63,7 @@ Meldungen:
 
 chat_completion = client.chat.completions.create(
     messages=[{"role": "user", "content": prompt}],
-    model="llama-3.1-8b-instant",
+    model=chosen_model,
 )
 report_text = chat_completion.choices[0].message.content
 
