@@ -1,4 +1,4 @@
-imporimport os
+import os
 import smtplib
 import feedparser
 import requests
@@ -76,9 +76,6 @@ if email_user and email_pass and email_to:
 
     server = smtplib.SMTP("smtp.gmail.com", 587)
     server.starttls()
-    server.login(email_user, email_pass)
-    server.sendmail(email_user, email_to, msg.as_string())
-    server.quit()
     server.login(email_user, email_pass)
     server.sendmail(email_user, email_to, msg.as_string())
     server.quit()
