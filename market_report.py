@@ -186,8 +186,12 @@ plain_summary = plain_summary.replace("<strong>", "*").replace("</strong>", "*")
 for tag in ["<p>", "</p>", "<ul class=\"news-list\">", "</ul>", "<span class=\"sentiment\">", "</span>"]:
     plain_summary = plain_summary.replace(tag, "")
 
-tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-tg_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+raw_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+tg_chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+
+# Sichere Token-Filterung: Entfernt versehentliche URLs oder Präfixe
+tg_token = raw_token.split("/")[-1].replace("bot", "").strip() if "http" in raw_token else raw_token
+
 if tg_token and tg_chat_id:
     tg_url = f"[https://api.telegram.org/bot](https://api.telegram.org/bot){tg_token}/sendMessage"
     requests.post(
