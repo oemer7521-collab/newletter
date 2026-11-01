@@ -17,7 +17,7 @@ FEEDS = [
 collected_news = []
 for feed_url in FEEDS:
     feed = feedparser.parse(feed_url)
-    for entry in feed.entries[:6]:
+    for entry in feed.entries[:6]:  # Die Top 6 je Quelle
         summary = entry.get('summary', '') or entry.get('description', '')
         collected_news.append(f"- {entry.title}: {summary}")
 
@@ -196,4 +196,21 @@ if tg_token and tg_chat_id:
     )
 
 # 5. E-Mail versenden (HTML + Text-Fallback)
-email_user = os
+email_user = os.environ.get("EMAIL_USER")
+email_pass = os.environ.get("EMAIL_PASS")
+email_to = os.environ.get("EMAIL_RECEIVER")
+
+if email_user and email_pass and email_to:
+    msg = MIMEMultipart("alternative")
+    msg["From"] = f"Market Intelligence <{email_user}>"
+    msg["To"] = email_to
+    msg["Subject"] = "Daily Market Briefing: Global Macro & Equity"
+
+    msg.attach(MIMEText(plain_summary.strip(), "plain", "utf-8"))
+    msg.attach(MIMEText(full_email_html, "html", "utf-8"))
+
+    server = smtplib.SMTP("smtp.gmail.com", 587)
+    server.starttls()
+    server.login(email_user, email_pass)
+    server.sendmail(email_user, email_to, msg.as_string())
+    server.quit()
