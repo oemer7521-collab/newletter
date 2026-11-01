@@ -2,6 +2,7 @@ name: Daily Market News Briefing
 
 on:
   schedule:
+    # Montag bis Freitag um 05:45 Uhr UTC (ca. 06:45 / 07:45 Uhr MEZ)
     - cron: '45 5 * * 1-5'
   workflow_dispatch:
 
